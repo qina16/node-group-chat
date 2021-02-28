@@ -1,50 +1,186 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Simple Group Chat on Node.js</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font: 13px Helvetica, Arial; }
-        form { background: #fff; padding: 3px; position: fixed; bottom: 0; width: 100%; border-color: #000; border-top-style: solid; border-top-width: 1px;}
-        form input { border-style: solid; border-width: 1px; padding: 10px; width: 85%; margin-right: .5%; }
-        form button { width: 9%; background: rgb(130, 224, 255); border: none; padding: 10px; margin-left: 2%; }
-        #messages { list-style-type: none; margin: 0; padding: 0; }
-        #messages li { padding: 5px 10px; }
-        #messages li:nth-child(odd) { background: #eee; }
-    </style>
-    <script src="../../socket.io/socket.io.js"></script>
-    <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
-  </head>
-  <body>
-    <ul id="messages"></ul>
-    <form action="/" method="POST" id="chatForm">
-      <input id="txt" autocomplete="off" autofocus="on" oninput="isTyping()" placeholder="type your message here..." /><button>Send</button>
-    </form>
-    <script>
-            var socket = io.connect('http://localhost:8080');
 
-            // submit text message without reload/refresh the page
-            $('form').submit(function(e){
-                e.preventDefault(); // prevents page reloading
-                socket.emit('chat_message', $('#txt').val());
-                $('#txt').val('');
-                return false;
-            });
+<head>
+  <title>Chat</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-            // append the chat text message
-            socket.on('chat_message', function(msg){
-                $('#messages').append($('<li>').html(msg));
-            });
+    body {
+      font: 13px Helvetica, Arial;
+    }
 
-            // append text if someone is online
-            socket.on('is_online', function(username) {
-                $('#messages').append($('<li>').html(username));
-            });
+    form {
+      background: #fff;
+      padding: 3px;
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      border-color: #000;
+      border-top-style: solid;
+      border-top-width: 1px;
+    }
 
-            // ask username
-            var username = prompt('Please tell me your name');
-            socket.emit('username', username);
+    form input {
+      border-style: solid;
+      border-width: 1px;
+      padding: 10px;
+      width: 50%;
+      margin-right: .5%;
+    }
 
-    </script>
-  </body>
+    form button {
+      width: 9%;
+      background: rgb(130, 224, 255);
+      border: none;
+      padding: 10px;
+      margin-left: 2%;
+    }
+
+    #messages {
+      list-style-type: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    #messages li {
+      padding: 5px 10px;
+    }
+
+    #messages li:nth-child(odd) {
+      background: #eee;
+    }
+
+    section {
+      position: sticky;
+      padding: 10px;
+      top: 0;
+      background-color: yellow;
+    }
+  </style>
+  <script src="../../socket.io/socket.io.js"></script>
+  <script src="jquery-1.10.1.min.js"></script>
+</head>
+
+<body>
+  <section id='top'>
+    <ul id="whotyped"></ul>
+    <ul id="whojoined"></ul>
+  </section>
+  <ul id="messages"></ul>
+
+  <form action="/" method="POST" id="chatForm">
+    <input id="txt" autocomplete="off" autofocus="on" onfocus="typing()" onblur="notTyping()"
+      placeholder="type your message here..." />
+    <label for="user-select">Send Message to:</label>
+
+    <select id="user-select">
+      <option value="" selected>All</option>
+    </select>
+    <button>Send</button>
+  </form>
+  <script>
+    var port = (window.location.port == null)?window.location.port:443;
+    var socket = io.connect('https://' + window.location.hostname + ':'+ port);
+    //var socket = io.connect('https://localhost');
+    // ask username
+    var username = prompt('Please tell me your name');
+    let isWindowBlur = false;
+    let timer = '';
+    socket.emit('username', username);
+    const userList = [];
+    // submit text message without reload/refresh the page
+    $('form').submit(function (e) {
+      e.preventDefault(); // prevents page reloading
+      if ($('#user-select').val() === '') {
+        socket.emit('chat_message', [$('#txt').val(), '']);
+        $('#messages').append($('<li>').html(`<strong>${username}</strong> to All: ` + $('#txt').val() + '          <small>--' + new Date().toLocaleTimeString() + '<small>'));
+      } else {
+        socket.emit('chat_message', [$('#txt').val(), $('#user-select').val()]);
+        $('#messages').append($('<li>').html(`<strong>${username}</strong> to ` + $('#user-select option:selected').text() + ': ' + $('#txt').val() + '          <small>--' + new Date().toLocaleTimeString() + '<small>'));
+      }
+      $('#txt').val('');
+      return false;
+    });
+
+    // append the chat text message
+    socket.on('chat_message', function (msg) {
+      $('#messages').append($('<li>').html(msg + '          <small>--' + new Date().toLocaleTimeString() + '<small>'));
+      if (isWindowBlur) {
+        timer = window.setInterval(function () {
+          document.title = document.title == "Chat" ? "Chat - You have a new Message" : "Chat";
+        }, 1000);
+      }
+    });
+
+    // append text if someone is online
+    socket.on('is_online', function (name) {
+      $('#whojoined').append($('<li>').html(`🔵 <i>${name[0]} join the chat..</i>`));
+      if (name[0] != username && userList.indexOf(name[0]) === -1)
+        userList.push(name[0]);
+      if (name[0] != username)
+        $('#user-select').append($('<option>').attr({ 'id': `opt_${name[0]}`, 'value': name[1] }).html(name[0]));
+
+    });
+
+    socket.on('is_offline', function (name) {
+
+      if (userList.indexOf(name) != -1) {
+        userList.splice(userList.indexOf(name), 1);
+        $('#whojoined').append($('<li>').html(`🔴 <i>${name} left the chat..</i>`));
+      }
+      $(`#${name}`).remove();
+      $(`#opt_${name}`).remove();
+
+    });
+
+
+
+    socket.on('is_typing', function (name) {
+      if (username != name[0] && name[0] != null)
+        $('#whotyped').append($('<li>').attr('id', name[0]).html(`<strong>${name[0]}</strong>:  is typing`));
+      setTimeout(() => {
+        if (userList.indexOf(name[0]) === -1) {
+          userList.push(name[0]);
+          $('#user-select').append($('<option>').attr({ 'id': `opt_${name[0]}`, 'value': name[1] }).html(name[0]));
+          $('#whojoined').append($('<li>').html(`🔵 <i>${name[0]} join the chat..</i>`));
+        }
+      }, 1000);
+
+
+    });
+
+    socket.on('not_typing', function (name) {
+      if (username != name)
+        $(`#${name}`).remove();
+    });
+
+    function typing() {
+      socket.emit('is_typing', username);
+    }
+
+    function notTyping() {
+      socket.emit('not_typing', username);
+    }
+
+
+    $(window).on("blur", function () {
+      isWindowBlur = true;
+    }
+    ).on("focus", function () {
+      isWindowBlur = false;
+      document.title = "Chat";
+      clearInterval(timer);
+    });
+
+
+
+
+  </script>
+</body>
+
 </html>
